@@ -138,7 +138,9 @@ impl Drop for Container {
         let _ = cancel_handle.send(());
 
         // Wait for the thread to join
-        join_handle.join().unwrap();
+        if join_handle.join().is_err() {
+            error!("join error");
+        }
 
         trace!("finished dropping Container");
     }
@@ -150,7 +152,6 @@ impl Container {
         config: NodeConfig,
         runtime: RuntimeType,
     ) -> (tokio::sync::oneshot::Receiver<()>, Self) {
-        println!("spawn: {:#?}", config);
         let (startup_sender, startup_reciever) = tokio::sync::oneshot::channel();
         let (cancel_sender, cancel_reciever) = tokio::sync::oneshot::channel();
 
@@ -195,7 +196,9 @@ impl Container {
             });
 
             let thread = thread::spawn(move || {
-                rx.blocking_recv().unwrap();
+                if let Err(e) = rx.blocking_recv() {
+                    error!("thread wait failed: {}", e);
+                }
             });
 
             thread
