@@ -18,11 +18,16 @@ use sui_types::{
     crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes, KeypairTraits},
 };
 
+pub enum CommitteeConfig {
+    Size(NonZeroUsize),
+    Validators(Vec<ValidatorGenesisInfo>),
+}
+
 pub struct ConfigBuilder<R = OsRng> {
     rng: R,
     config_directory: PathBuf,
     randomize_ports: bool,
-    committee_size: NonZeroUsize,
+    committee: Option<CommitteeConfig>,
     initial_accounts_config: Option<GenesisConfig>,
 }
 
@@ -32,7 +37,7 @@ impl ConfigBuilder {
             rng: OsRng,
             config_directory: config_directory.as_ref().into(),
             randomize_ports: true,
-            committee_size: NonZeroUsize::new(1).unwrap(),
+            committee: Some(CommitteeConfig::Size(NonZeroUsize::new(1).unwrap())),
             initial_accounts_config: None,
         }
     }
@@ -44,8 +49,18 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn committee(mut self, committee: CommitteeConfig) -> Self {
+        self.committee = Some(committee);
+        self
+    }
+
     pub fn committee_size(mut self, committee_size: NonZeroUsize) -> Self {
-        self.committee_size = committee_size;
+        self.committee = Some(CommitteeConfig::Size(committee_size));
+        self
+    }
+
+    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> Self {
+        self.committee = Some(CommitteeConfig::Validators(validators));
         self
     }
 
@@ -59,7 +74,7 @@ impl<R> ConfigBuilder<R> {
             rng,
             config_directory: self.config_directory,
             randomize_ports: self.randomize_ports,
-            committee_size: self.committee_size,
+            committee: self.committee,
             initial_accounts_config: self.initial_accounts_config,
         }
     }
@@ -68,25 +83,30 @@ impl<R> ConfigBuilder<R> {
 impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     //TODO right now we always randomize ports, we may want to have a default port configuration
     pub fn build(mut self) -> NetworkConfig {
-        let validators = (0..self.committee_size.get())
-            .map(|_| get_key_pair_from_rng(&mut self.rng).1)
-            .map(|key_pair: AuthorityKeyPair| ValidatorGenesisInfo {
-                key_pair,
-                network_address: utils::new_network_address(),
-                stake: DEFAULT_STAKE,
-                gas_price: DEFAULT_GAS_PRICE,
-                narwhal_primary_to_primary: utils::new_network_address(),
-                narwhal_worker_to_primary: utils::new_network_address(),
-                narwhal_primary_to_worker: utils::new_network_address(),
-                narwhal_worker_to_worker: utils::new_network_address(),
-                narwhal_consensus_address: utils::new_network_address(),
-            })
-            .collect::<Vec<_>>();
+        let committee = self.committee.take().unwrap();
+
+        let validators = match committee {
+            CommitteeConfig::Size(size) => (0..size.get())
+                .map(|_| get_key_pair_from_rng(&mut self.rng).1)
+                .map(|key_pair: AuthorityKeyPair| ValidatorGenesisInfo {
+                    key_pair,
+                    network_address: utils::new_network_address(),
+                    stake: DEFAULT_STAKE,
+                    gas_price: DEFAULT_GAS_PRICE,
+                    narwhal_primary_to_primary: utils::new_network_address(),
+                    narwhal_worker_to_primary: utils::new_network_address(),
+                    narwhal_primary_to_worker: utils::new_network_address(),
+                    narwhal_worker_to_worker: utils::new_network_address(),
+                    narwhal_consensus_address: utils::new_network_address(),
+                })
+                .collect::<Vec<_>>(),
+            CommitteeConfig::Validators(v) => v,
+        };
 
         self.build_with_validators(validators)
     }
 
-    pub fn build_with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> NetworkConfig {
+    fn build_with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> NetworkConfig {
         let validator_set = validators
             .iter()
             .enumerate()
