@@ -39,6 +39,68 @@ pub async fn start_test_network(
     start_test_network_with_fullnodes(genesis_config, 0, None, None).await
 }
 
+pub async fn start_test_network_with_one_validator(
+    genesis_config: Option<GenesisConfig>,
+) -> Result<Swarm, anyhow::Error> {
+    dbg!("-");
+    let mut builder: SwarmBuilder = Swarm::builder()
+        .committee_size(NonZeroUsize::new(1).unwrap())
+        .with_fullnode_count(0);
+
+    dbg!("-");
+    if let Some(genesis_config) = genesis_config {
+        dbg!("-");
+        builder = builder.initial_accounts_config(genesis_config);
+    }
+
+    dbg!("-");
+    let mut swarm = builder.build();
+    dbg!("-");
+    swarm.launch().await?;
+    dbg!("-");
+
+    let dir = swarm.dir();
+
+    let network_path = dir.join(SUI_NETWORK_CONFIG);
+    let wallet_path = dir.join(SUI_CLIENT_CONFIG);
+    let keystore_path = dir.join(SUI_KEYSTORE_FILENAME);
+    let db_folder_path = dir.join("client_db");
+    let gateway_path = dir.join(SUI_GATEWAY_CONFIG);
+
+    swarm.config().save(&network_path)?;
+    let mut keystore = KeystoreType::File(keystore_path.clone()).init()?;
+    for key in &swarm.config().account_keys {
+        keystore.add_key(key.copy())?;
+    }
+
+    let validators = swarm.config().validator_set().to_owned();
+    let active_address = keystore.addresses().first().cloned();
+
+    dbg!("-");
+    GatewayConfig {
+        db_folder_path: db_folder_path.clone(),
+        validator_set: validators.clone(),
+        ..Default::default()
+    }
+    .save(gateway_path)?;
+    dbg!("-");
+
+    // Create wallet config with stated authorities port
+    SuiClientConfig {
+        keystore: KeystoreType::File(keystore_path),
+        gateway: ClientType::Embedded(GatewayConfig {
+            db_folder_path,
+            validator_set: validators,
+            ..Default::default()
+        }),
+        active_address,
+    }
+    .save(&wallet_path)?;
+    dbg!("-");
+
+    Ok(swarm)
+}
+
 pub async fn start_test_network_with_fullnodes(
     genesis_config: Option<GenesisConfig>,
     fullnode_count: usize,

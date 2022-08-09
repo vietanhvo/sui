@@ -19,6 +19,7 @@ use tracing::info;
 
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_config::utils::get_available_port;
+use sui_config::SUI_CLIENT_CONFIG;
 use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
     SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveStruct,
@@ -35,7 +36,7 @@ use sui_types::{
 };
 use test_utils::messages::get_account_and_gas_coins;
 use test_utils::messages::make_transactions_with_wallet_context;
-use test_utils::network::setup_network_and_wallet;
+use test_utils::network::{setup_network_and_wallet, start_test_network_with_one_validator};
 
 async fn transfer_coin(
     context: &mut WalletContext,
@@ -683,6 +684,33 @@ async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
     } else {
         panic!("Expect ImmediateReturn but got {:?}", response);
     }
+
+    Ok(())
+}
+
+// Test for syncing a node to an authority that already has many txes.
+#[tokio::test]
+async fn test_simple_net() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+
+    dbg!("-");
+    let swarm = start_test_network_with_one_validator(None).await.unwrap();
+    dbg!("-");
+
+    let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
+    dbg!("-");
+    let mut context = WalletContext::new(&wallet_conf).await?;
+    dbg!("-");
+    let address = context.keystore.addresses().first().cloned().unwrap();
+
+    dbg!("-");
+    // Sync client to retrieve objects from the network.
+    SuiClientCommands::SyncClientState {
+        address: Some(address),
+    }
+    .execute(&mut context)
+    .await
+    .unwrap();
 
     Ok(())
 }
