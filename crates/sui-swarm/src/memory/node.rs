@@ -136,9 +136,11 @@ impl Drop for Container {
         let cancel_handle = self.cancel_sender.take().unwrap();
 
         // Notify the thread to shutdown
+        dbg!("send cancel");
         let _ = cancel_handle.send(());
 
         // Wait for the thread to join
+        // XXX Deadlock
         if join_handle.join().is_err() {
             error!("join error");
         }
