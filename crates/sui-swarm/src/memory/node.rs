@@ -15,10 +15,7 @@ use tracing::{error, info, trace};
 use madsim;
 
 #[cfg(madsim)]
-use std::{
-    net::{IpAddr, Ipv4Addr},
-    sync::atomic::{AtomicU8, Ordering},
-};
+use std::net::{IpAddr, SocketAddr};
 
 /// A handle to an in-memory Sui Node.
 ///
@@ -77,7 +74,11 @@ impl Node {
     /// Stop this Node
     pub fn stop(&mut self) {
         trace!(name =% self.name(), "stopping in-memory node");
-        self.thread = None;
+        if let Some(mut thread) = self.thread.take() {
+            if let Some(sender) = thread.cancel_sender.take() {
+                sender.send(()).unwrap();
+            }
+        }
     }
 
     /// Perform a health check on this Node by:
@@ -171,17 +172,15 @@ impl Container {
             let handle = madsim::runtime::Handle::current();
             let builder = handle.create_node();
 
-            static NEXT_IP_LOW_OCTET: AtomicU8 = AtomicU8::new(0);
-
-            let low_octet = NEXT_IP_LOW_OCTET.fetch_add(1, Ordering::SeqCst);
-
-            if low_octet >= 254 {
-                // TODO: support more than one octet
-                panic!("out of IPs");
-            }
+            let socket_addr =
+                mysten_network::multiaddr::to_socket_addr(&config.network_address).unwrap();
+            let ip = match socket_addr {
+                SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
+                _ => panic!("unsupported protocol"),
+            };
 
             let node = builder
-                .ip(IpAddr::V4(Ipv4Addr::new(10, 10, 0, low_octet)))
+                .ip(ip)
                 .name(format!("{}", config.public_key()))
                 .init(|| async {
                     info!("node restarted");

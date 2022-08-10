@@ -6,19 +6,23 @@ use anyhow::Result;
 use futures::future::try_join_all;
 use rand::rngs::OsRng;
 use std::collections::HashMap;
+use std::future::Future;
+use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
+use std::str::FromStr;
 use std::{
     mem, ops,
     path::{Path, PathBuf},
 };
 use sui_config::builder::{CommitteeConfig, ConfigBuilder};
-use sui_config::genesis_config::GenesisConfig;
+use sui_config::genesis_config::{GenesisConfig, ValidatorGenesisInfo};
 use sui_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
+use sui_types::crypto::get_key_pair_from_rng;
 use tempfile::TempDir;
 
-use tracing::warn;
+use tracing::{info, warn};
 
 use tap::TapFallible;
 
@@ -79,6 +83,11 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> Self {
+        self.committee = CommitteeConfig::Validators(validators);
+        self
+    }
+
     pub fn initial_accounts_config(mut self, initial_accounts_config: GenesisConfig) -> Self {
         self.initial_accounts_config = Some(initial_accounts_config);
         self
@@ -101,6 +110,19 @@ impl<R> SwarmBuilder<R> {
 }
 
 impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
+    pub fn with_validators_ipv4(mut self, validators: Vec<&str>) -> Self {
+        let validators = validators
+            .iter()
+            .map(|ip| {
+                let key_pair = get_key_pair_from_rng(&mut self.rng).1;
+                ValidatorGenesisInfo::from_base_ip(key_pair, (*ip).into())
+            })
+            .collect();
+
+        self.committee = CommitteeConfig::Validators(validators);
+        self
+    }
+
     /// Create the configured Swarm.
     pub fn build(self) -> Swarm {
         let dir = if let Some(dir) = self.dir {
@@ -192,6 +214,30 @@ impl Swarm {
         try_join_all(start_handles)
             .await
             .tap_err(|e| warn!("{}", e))?;
+
+        Ok(())
+    }
+
+    pub async fn run_client_task<F: Future + Send + 'static>(&self, ip: &str, f: F) -> Result<()> {
+        let ip = IpAddr::from_str(ip).unwrap();
+
+        let handle = madsim::runtime::Handle::current();
+        let builder = handle.create_node();
+        let node = builder
+            .ip(ip)
+            .name("client")
+            .init(|| async {
+                info!("client restarted");
+            })
+            .build();
+
+        node.spawn(async move {
+            dbg!("-");
+            f.await;
+            dbg!("-");
+        })
+        .await?;
+        dbg!("-");
 
         Ok(())
     }

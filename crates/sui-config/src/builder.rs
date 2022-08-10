@@ -5,7 +5,7 @@ use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorGenesisInfo},
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
-    CONSENSUS_DB_NAME, DEFAULT_GAS_PRICE, DEFAULT_STAKE,
+    CONSENSUS_DB_NAME,
 };
 use rand::rngs::OsRng;
 use std::{
@@ -88,16 +88,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let validators = match committee {
             CommitteeConfig::Size(size) => (0..size.get())
                 .map(|_| get_key_pair_from_rng(&mut self.rng).1)
-                .map(|key_pair: AuthorityKeyPair| ValidatorGenesisInfo {
-                    key_pair,
-                    network_address: utils::new_network_address(),
-                    stake: DEFAULT_STAKE,
-                    gas_price: DEFAULT_GAS_PRICE,
-                    narwhal_primary_to_primary: utils::new_network_address(),
-                    narwhal_worker_to_primary: utils::new_network_address(),
-                    narwhal_primary_to_worker: utils::new_network_address(),
-                    narwhal_worker_to_worker: utils::new_network_address(),
-                    narwhal_consensus_address: utils::new_network_address(),
+                .map(|key_pair: AuthorityKeyPair| {
+                    ValidatorGenesisInfo::from_localhost_for_testing(key_pair)
                 })
                 .collect::<Vec<_>>(),
             CommitteeConfig::Validators(v) => v,
