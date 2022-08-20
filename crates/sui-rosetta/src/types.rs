@@ -469,13 +469,13 @@ pub struct Allow {
 
 #[derive(Debug, EnumIter)]
 pub enum OperationStatus {
-    SUCCESS,
+    Success,
 }
 
 impl OperationStatus {
     fn is_successful(&self) -> bool {
         match self {
-            OperationStatus::SUCCESS => true,
+            OperationStatus::Success => true,
         }
     }
 }
@@ -485,7 +485,7 @@ impl Serialize for OperationStatus {
     where
         S: Serializer,
     {
-        json!({ "status" : format!("{self:?}"), "successful" : self.is_successful() })
+        json!({ "status" : format!("{self:?}").to_uppercase(), "successful" : self.is_successful() })
             .serialize(serializer)
     }
 }
@@ -502,6 +502,7 @@ pub struct BalanceExemption {
 
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum ExemptionType {
     GreaterOrEqual,
     LessOrEqual,
@@ -510,7 +511,7 @@ pub enum ExemptionType {
 
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
-#[allow(clippy::enum_variant_names)]
+#[allow(clippy::enum_variant_names, dead_code)]
 pub enum Case {
     UpperCase,
     LowerCase,

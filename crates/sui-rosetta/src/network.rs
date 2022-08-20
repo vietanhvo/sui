@@ -88,9 +88,7 @@ pub async fn options(
 ) -> Result<NetworkOptionsResponse, Error> {
     state.checks_network_identifier(&payload.network_identifier)?;
 
-    let errors = ErrorType::iter()
-        .map(|t: ErrorType| Error::new(t))
-        .collect();
+    let errors = ErrorType::iter().map(Error::new).collect();
 
     Ok(NetworkOptionsResponse {
         version: Version {

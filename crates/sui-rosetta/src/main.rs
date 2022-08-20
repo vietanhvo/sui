@@ -8,7 +8,7 @@ use std::sync::Arc;
 use axum::routing::post;
 use axum::{Extension, Router};
 use itertools::Itertools;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use serde_json::json;
 use tracing::info;
 
@@ -25,12 +25,10 @@ mod errors;
 mod network;
 mod types;
 
-lazy_static! {
-    pub static ref SUI: Currency = Currency {
-        symbol: "SUI".to_string(),
-        decimals: 8,
-    };
-}
+pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
+    symbol: "SUI".to_string(),
+    decimals: 8,
+});
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
