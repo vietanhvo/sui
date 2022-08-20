@@ -7437,6 +7437,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
+ "workspace-hack 0.1.0",
 ]
 
 [[package]]
@@ -9214,6 +9215,7 @@ dependencies = [
  "autocfg 1.1.0",
  "axum",
  "axum-core",
+ "axum-macros",
  "backoff",
  "backtrace",
  "base16ct",
