@@ -266,28 +266,80 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
 
-    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+    let ip = std::net::IpAddr::from_str("10.0.0.1").unwrap();
 
-    let (_, _, _, _) = transfer_coin(&mut context).await?;
-    let (_, _, _, _) = transfer_coin(&mut context).await?;
-    let (_, _, _, _) = transfer_coin(&mut context).await?;
-    let (_transfered_object, _sender, _receiver, digest) = transfer_coin(&mut context).await?;
-
-    // Make sure the validators are quiescent before bringing up the node.
-    sleep(Duration::from_millis(1000)).await;
-
-    let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config).await?;
-
-    wait_for_tx(digest, node.state().clone()).await;
-
-    let info = node
-        .state()
-        .handle_transaction_info_request(TransactionInfoRequest {
-            transaction_digest: digest,
+    let handle = madsim::runtime::Handle::current();
+    let builder = handle.create_node();
+    let node = builder
+        .ip(ip)
+        .name("client")
+        .init(|| async {
+            info!("client restarted");
         })
-        .await?;
-    assert!(info.signed_effects.is_some());
+        .build();
+
+    node.spawn(async move {
+        let builder: SwarmBuilder = Swarm::builder()
+            .with_validators_ipv4(vec!["10.10.0.1", "10.10.0.2", "10.10.0.3", "10.10.0.4"])
+            .with_fullnode_count(0);
+
+        dbg!("-");
+        let mut swarm = builder.build();
+
+        configure_gateway_and_client(&swarm).await.unwrap();
+        let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
+
+        swarm.launch().await.unwrap();
+
+        dbg!("-");
+
+        dbg!("-");
+        let mut context = WalletContext::new(&wallet_conf).await.unwrap();
+        dbg!("-");
+        let address = context.keystore.addresses().first().cloned().unwrap();
+
+        dbg!("-");
+        // Sync client to retrieve objects from the network.
+        SuiClientCommands::SyncClientState {
+            address: Some(address),
+        }
+        .execute(&mut context)
+        .await
+        .unwrap();
+        dbg!("-");
+
+        //let (swarm, mut context, _) = setup_network_and_wallet().await.unwrap();
+
+        let (_, _, _, _) = transfer_coin(&mut context).await.unwrap();
+        let (_, _, _, _) = transfer_coin(&mut context).await.unwrap();
+        let (_, _, _, _) = transfer_coin(&mut context).await.unwrap();
+        let (_transfered_object, _sender, _receiver, digest) =
+            transfer_coin(&mut context).await.unwrap();
+
+        // Make sure the validators are quiescent before bringing up the node.
+        dbg!("-");
+        info!("sleeping");
+        sleep(Duration::from_millis(1000)).await;
+        info!("waking");
+        dbg!("-");
+
+        let config = swarm.config().generate_fullnode_config();
+        let node = SuiNode::start(&config).await.unwrap();
+
+        dbg!("-");
+        wait_for_tx(digest, node.state().clone()).await;
+
+        let info = node
+            .state()
+            .handle_transaction_info_request(TransactionInfoRequest {
+                transaction_digest: digest,
+            })
+            .await
+            .unwrap();
+        assert!(info.signed_effects.is_some());
+    })
+    .await?;
+    dbg!("-");
 
     Ok(())
 }
@@ -730,5 +782,58 @@ async fn test_simple_net() -> Result<(), anyhow::Error> {
 
     //swarm.validators_mut().for_each(|v| v.stop());
 
+    Ok(())
+}
+
+use std::str::FromStr;
+// Test for syncing a node to an authority that already has many txes.
+#[tokio::test]
+async fn test_simple_net2() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+
+    let ip = std::net::IpAddr::from_str("10.0.0.1").unwrap();
+
+    let handle = madsim::runtime::Handle::current();
+    let builder = handle.create_node();
+    let node = builder
+        .ip(ip)
+        .name("client")
+        .init(|| async {
+            info!("client restarted");
+        })
+        .build();
+
+    node.spawn(async move {
+        let builder: SwarmBuilder = Swarm::builder()
+            .with_validators_ipv4(vec!["10.10.0.1"])
+            .with_fullnode_count(0);
+
+        dbg!("-");
+        let mut swarm = builder.build();
+
+        configure_gateway_and_client(&swarm).await.unwrap();
+        let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
+
+        swarm.launch().await.unwrap();
+
+        dbg!("-");
+
+        dbg!("-");
+        let mut context = WalletContext::new(&wallet_conf).await.unwrap();
+        dbg!("-");
+        let address = context.keystore.addresses().first().cloned().unwrap();
+
+        dbg!("-");
+        // Sync client to retrieve objects from the network.
+        SuiClientCommands::SyncClientState {
+            address: Some(address),
+        }
+        .execute(&mut context)
+        .await
+        .unwrap();
+        dbg!("-");
+    })
+    .await?;
+    dbg!("-");
     Ok(())
 }

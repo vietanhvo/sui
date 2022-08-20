@@ -334,6 +334,8 @@ where
     }
 
     pub async fn spawn_node_sync_process(self: Arc<Self>) -> JoinHandle<()> {
+        debug!("spawn_node_sync_process");
+
         let committee = self.state.committee.load().deref().clone();
         // nodes follow all validators to ensure they can eventually determine
         // finality of certs. We need to follow 2f+1 _honest_ validators to
@@ -341,6 +343,7 @@ where
         let target_num_tasks = committee.num_members();
 
         tokio::task::spawn(async move {
+            debug!("spawn_node_sync_process");
             node_sync_process(&self, target_num_tasks).await;
         })
     }

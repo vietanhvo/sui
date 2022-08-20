@@ -51,7 +51,7 @@ pub async fn configure_gateway_and_client(swarm: &Swarm) -> Result<(), anyhow::E
     swarm.config().save(&network_path)?;
     let mut keystore = KeystoreType::File(keystore_path.clone()).init()?;
     for key in &swarm.config().account_keys {
-        keystore.add_key(key.copy())?;
+        keystore.add_key(Ed25519SuiKeyPair(key.copy()))?;
     }
 
     let validators = swarm.config().validator_set().to_owned();
@@ -104,7 +104,7 @@ pub async fn start_test_network_with_one_validator(
     swarm.config().save(&network_path)?;
     let mut keystore = KeystoreType::File(keystore_path.clone()).init()?;
     for key in &swarm.config().account_keys {
-        keystore.add_key(key.copy())?;
+        keystore.add_key(Ed25519SuiKeyPair(key.copy()))?;
     }
 
     let validators = swarm.config().validator_set().to_owned();

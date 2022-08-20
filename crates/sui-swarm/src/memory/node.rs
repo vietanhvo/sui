@@ -138,12 +138,13 @@ impl Drop for Container {
         // Notify the thread to shutdown
         dbg!("send cancel");
         let _ = cancel_handle.send(());
+        //std::process::exit(0);
 
         // Wait for the thread to join
         // XXX Deadlock
-        if join_handle.join().is_err() {
-            error!("join error");
-        }
+        //if join_handle.join().is_err() {
+        //    error!("join error");
+        //}
 
         trace!("finished dropping Container");
     }
@@ -163,6 +164,7 @@ impl Container {
             let config = inner_config;
             let _server = SuiNode::start(&config).await.unwrap();
             // Notify that we've successfully started the node
+            error!("node started, sending oneshot");
             let _ = startup_sender.send(());
             // run until canceled
             cancel_reciever.map(|_| ()).await;

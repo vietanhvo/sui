@@ -348,7 +348,7 @@ pub async fn build_node_server(
     prometheus_registry: &Registry,
 ) -> Result<(Option<HttpServerHandle>, Option<WsServerHandle>)> {
     // Validators do not expose these APIs
-    if config.consensus_config().is_some() {
+    if config.consensus_config().is_some() || cfg!(madsim) {
         return Ok((None, None));
     }
     let mut server = JsonRpcServerBuilder::new(false, prometheus_registry)?;

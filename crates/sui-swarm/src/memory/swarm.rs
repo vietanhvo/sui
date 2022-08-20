@@ -210,6 +210,7 @@ impl Swarm {
         let start_handles = nodes_iter
             .map(|node| node.spawn())
             .collect::<Result<Vec<_>>>()?;
+        tracing::error!("start_handles len {:?}", start_handles.len());
 
         try_join_all(start_handles)
             .await
