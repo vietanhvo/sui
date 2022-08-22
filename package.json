@@ -12,5 +12,8 @@
       "@types/react": "17.x",
       "@types/react-dom": "17.x"
     }
+  },
+  "dependencies": {
+    "lodash": "4.17.20"
   }
 }
