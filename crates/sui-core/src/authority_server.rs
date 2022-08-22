@@ -187,7 +187,6 @@ impl ValidatorService {
             consensus_config.narwhal_config().to_owned(),
             /* consensus */ true, // Indicate that we want to run consensus.
             /* execution_state */ state.clone(),
-            /* tx_confirmation */ tx_consensus_to_sui,
             prometheus_registry,
         )
         .await?;

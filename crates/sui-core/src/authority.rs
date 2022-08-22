@@ -18,7 +18,7 @@ use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use narwhal_executor::ExecutionStateError;
+use narwhal_executor::{BatchExecutionState, ExecutionStateError};
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
 use prometheus::{
@@ -1699,85 +1699,13 @@ impl AuthorityState {
 
 #[async_trait]
 impl ExecutionState for AuthorityState {
-    type Transaction = ConsensusTransaction;
     type Error = SuiError;
-    type Outcome = Vec<u8>;
-
-    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
-    #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_transaction(
-        &self,
-        // TODO [2533]: use this once integrating Narwhal reconfiguration
-        _consensus_output: &narwhal_consensus::ConsensusOutput,
-        consensus_index: ExecutionIndices,
-        transaction: Self::Transaction,
-    ) -> Result<Self::Outcome, Self::Error> {
-        self.metrics.total_consensus_txns.inc();
-        match transaction {
-            ConsensusTransaction::UserTransaction(certificate) => {
-                // Ensure the input is a shared object certificate. Remember that Byzantine authorities
-                // may input anything into consensus.
-                fp_ensure!(
-                    certificate.contains_shared_object(),
-                    SuiError::NotASharedObjectTransaction
-                );
-
-                // Check the certificate. Remember that Byzantine authorities may input anything into
-                // consensus.
-                certificate.verify(&self.committee.load())?;
-
-                debug!(tx_digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
-
-                self.database
-                    .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
-                    .await?;
-
-                // TODO: This return time is not ideal.
-                // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok(Vec::default())
-            }
-            ConsensusTransaction::Checkpoint(fragment) => {
-                let seq = consensus_index;
-                debug!(?seq, "handle_consensus_transaction Checkpoint");
-
-                if let Some(checkpoint) = &self.checkpoints {
-                    let mut checkpoint = checkpoint.lock();
-                    checkpoint
-                        .handle_internal_fragment(
-                            seq,
-                            *fragment,
-                            &self.committee.load(),
-                            self.database.clone(),
-                        )
-                        .map_err(|e| SuiError::from(&e.to_string()[..]))?;
-
-                    // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
-                    // to persist the consensus index. If the validator crashes, this transaction
-                    // may be resent to the checkpoint logic that will simply ignore it.
-
-                    // Cache the next checkpoint number if it changes
-                    self.latest_checkpoint_num
-                        .store(checkpoint.next_checkpoint(), Ordering::Relaxed);
-                }
-
-                // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
-                // is not expecting any reply.
-                // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok(Vec::default())
-            }
-        }
-    }
-
     fn ask_consensus_write_lock(&self) -> bool {
         self.consensus_guardrail.fetch_add(1, Ordering::SeqCst) == 0
     }
 
     fn release_consensus_write_lock(&self) {
         self.consensus_guardrail.fetch_sub(0, Ordering::SeqCst);
-    }
-
-    async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
-        self.database.last_consensus_index()
     }
 }
 
