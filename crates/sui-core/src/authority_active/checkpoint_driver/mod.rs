@@ -247,6 +247,7 @@ pub async fn checkpoint_process<A>(
                     last_cert_time = Instant::now();
                     if enable_reconfig {
                         if state_checkpoints.lock().is_ready_to_start_epoch_change() {
+                            // TODO: Make sure the validator never lose liveness.
                             while let Err(err) = active_authority.start_epoch_change().await {
                                 error!("Failed to start epoch change: {:?}", err);
                                 tokio::time::sleep(timing.epoch_change_retry_delay).await;
