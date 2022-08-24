@@ -1131,6 +1131,7 @@ mod bcs_signable {
     impl BcsSignable for crate::batch::AuthorityBatch {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointSummary {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointContents {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointProposalContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalSummary {}
     impl BcsSignable for crate::messages::TransactionEffects {}
     impl BcsSignable for crate::messages::TransactionData {}
